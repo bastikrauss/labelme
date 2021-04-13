@@ -13,11 +13,11 @@ from qtpy.QtCore import Qt
 from qtpy import QtGui
 from qtpy import QtWidgets
 
-from labelme import __appname__
+from __init__ import __appname__
 from labelme import PY2
 from labelme import QT5
 
-from . import utils
+import utils
 from labelme.config import get_config
 from labelme.label_file import LabelFile
 from labelme.label_file import LabelFileError
@@ -507,6 +507,11 @@ class MainWindow(QtWidgets.QMainWindow):
             "Adjust brightness and contrast",
             enabled=False,
         )
+        self.darkFlag = False
+        darkmode = action('Dark Mode', self.darkmode,
+                          icon='eye', tip='Changes Appearance',
+                          checkable=True, enabled=True)
+
         # Group zoom controls into a list for easier toggling.
         zoomActions = (
             self.zoomWidget,
@@ -585,6 +590,7 @@ class MainWindow(QtWidgets.QMainWindow):
             fitWindow=fitWindow,
             fitWidth=fitWidth,
             brightnessContrast=brightnessContrast,
+            darkmode=darkmode,
             zoomActions=zoomActions,
             openNextImg=openNextImg,
             openPrevImg=openPrevImg,
@@ -687,6 +693,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 fitWidth,
                 None,
                 brightnessContrast,
+                None,
+                darkmode
             ),
         )
 
@@ -1408,6 +1416,14 @@ class MainWindow(QtWidgets.QMainWindow):
         contrast = dialog.slider_contrast.value()
         self.brightnessContrast_values[self.filename] = (brightness, contrast)
 
+    def darkmode(self, value=True):
+        if self.darkFlag is False:
+            self.darkFlag = True
+            self.setStyleSheet("background-color: black; color: white")
+        else:
+            self.darkFlag = False
+            self.setStyleSheet("background-color: white; color: black")
+    
     def togglePolygons(self, value):
         for item in self.labelList:
             item.setCheckState(Qt.Checked if value else Qt.Unchecked)
