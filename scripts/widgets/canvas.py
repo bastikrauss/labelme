@@ -1,10 +1,12 @@
+import sys
 from qtpy import QtCore
 from qtpy import QtGui
 from qtpy import QtWidgets
 
 from labelme import QT5
-from labelme.shape import Shape
+from scripts.shape import Shape
 import labelme.utils
+from labelme.logger import logger
 
 
 # TODO(unknown):
@@ -35,6 +37,8 @@ class Canvas(QtWidgets.QWidget):
     _createMode = "polygon"
 
     _fill_drawing = False
+
+    logger.info("Canvas")
 
     def __init__(self, *args, **kwargs):
         self.epsilon = kwargs.pop("epsilon", 10.0)
@@ -74,6 +78,8 @@ class Canvas(QtWidgets.QWidget):
         self.hEdge = None
         self.prevhEdge = None
         self.movingShape = False
+        self.brushClicked = False
+        self.prevBrush = False
         self._painter = QtGui.QPainter()
         self._cursor = CURSOR_DEFAULT
         # Menus:
@@ -103,6 +109,7 @@ class Canvas(QtWidgets.QWidget):
             "line",
             "point",
             "linestrip",
+            "brush"
         ]:
             raise ValueError("Unsupported createMode: %s" % value)
         self._createMode = value
@@ -186,7 +193,30 @@ class Canvas(QtWidgets.QWidget):
         if self.drawing():
             self.line.shape_type = self.createMode
 
+            if self.createMode == "brush" and not self.brushClicked:
+                if not self.current:
+                    self.current = Shape(shape_type=self.createMode)
+                    self.current.addPoint(pos)
+                    self.prevBrush = True
+                else:
+                    self.current[0] = pos
+            if not self.createMode == "brush" and self.prevBrush:
+                self.undoLastPoint()
+                self.prevBrush = False
+
+                # self.overrideCursor(CURSOR_DRAW)
+                # color = QtGui.QColor(0, 255, 0, 128)
+                # pen = QtGui.QPen(color)
+                # # Try using integer sizes for smoother drawing(?)
+                # pen.setWidth(max(1, int(round(2.0 / self.scale))))
+                # q = self._painter
+                # q.begin(self)
+                # q.setPen(pen)
+                # q.drawEllipse(pos, 20, 20)
+                # #self.current.highlightVertex(0, Shape.NEAR_VERTEX)
+            
             self.overrideCursor(CURSOR_DRAW)
+
             if not self.current:
                 return
 
@@ -197,7 +227,7 @@ class Canvas(QtWidgets.QWidget):
             elif (
                 len(self.current) > 1
                 and self.createMode == "polygon"
-                and self.closeEnough(pos, self.current[0])
+                and self.closeEnough(pos, self.current[0]) #kurz bevor das Polygon geschlossen wird
             ):
                 # Attract line to starting point and
                 # colorise to alert the user.
@@ -214,6 +244,9 @@ class Canvas(QtWidgets.QWidget):
                 self.line.points = [self.current[0], pos]
                 self.line.shape_type = "circle"
             elif self.createMode == "line":
+                self.line.points = [self.current[0], pos]
+                self.line.close()
+            elif self.createMode == "brush":
                 self.line.points = [self.current[0], pos]
                 self.line.close()
             elif self.createMode == "point":
@@ -330,8 +363,14 @@ class Canvas(QtWidgets.QWidget):
                         self.line[0] = self.current[-1]
                         if self.current.isClosed():
                             self.finalise()
-                    elif self.createMode in ["rectangle", "circle", "line"]:
-                        assert len(self.current.points) == 1
+                    elif self.createMode == "brush":
+                        if not self.brushClicked:
+                            self.brushClicked = True
+                            return
+                        # else:
+                        #     self.brushClicked = False
+                    if self.createMode in ["rectangle", "circle", "line", "brush"]:
+                        assert len(self.current.points) == 1 #must be true to continue
                         self.current.points = self.line.points
                         self.finalise()
                     elif self.createMode == "linestrip":
@@ -364,6 +403,16 @@ class Canvas(QtWidgets.QWidget):
             self.repaint()
 
     def mouseReleaseEvent(self, ev):
+        if ev.button() == QtCore.Qt.LeftButton:
+            if self.drawing():
+                if self.current:
+                    # Add point to existing shape
+                    if self.createMode == "brush":
+                        assert len(self.current.points) == 1 #must be true to continue
+                        self.brushClicked = False
+                        #self.line.points =  self.current.getBrushRectFromLine(self.line.points)
+                        self.current.points = self.line.points
+                        self.finalise()
         if ev.button() == QtCore.Qt.RightButton:
             menu = self.menus[len(self.selectedShapesCopy) > 0]
             self.restoreCursor()
@@ -741,7 +790,7 @@ class Canvas(QtWidgets.QWidget):
         self.current.setOpen()
         if self.createMode in ["polygon", "linestrip"]:
             self.line.points = [self.current[-1], self.current[0]]
-        elif self.createMode in ["rectangle", "line", "circle"]:
+        elif self.createMode in ["rectangle", "line", "circle", "brush"]:
             self.current.points = self.current.points[0:1]
         elif self.createMode == "point":
             self.current = None
