@@ -1,0 +1,8 @@
+Veränderungen:
+- Dark Mode ergänzt
+- Brush-Funktion ergänzt
+
+Probleme der Brush-Funktion:
+- Hülle mus noch ergänzt werden
+- Freie Form mit gedrückter Maus schwer umsetzbar (momentan Linie)
+- Überlappende Bereiche müssten erkannt und fusioniert werden
