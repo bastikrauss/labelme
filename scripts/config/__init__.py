@@ -82,3 +82,4 @@ def get_config(config_file_or_yaml=None, config_from_args=None):
         )
 
     return config
+

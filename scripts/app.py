@@ -45,6 +45,8 @@ from labelme.widgets import ZoomWidget
 
 LABEL_COLORMAP = imgviz.label_colormap(value=200)
 
+_file_path = ""
+
 
 class MainWindow(QtWidgets.QMainWindow):
 
@@ -1459,6 +1461,7 @@ class MainWindow(QtWidgets.QMainWindow):
             item.setCheckState(Qt.Checked if value else Qt.Unchecked)
 
     def loadFile(self, filename=None):
+        global _file_path
         """Load the specified file, or the last opened file if None."""
         # changing fileListWidget loads file
         if filename in self.imageList and (
@@ -1480,6 +1483,7 @@ class MainWindow(QtWidgets.QMainWindow):
             )
             return False
         # assumes same name, but json extension
+        _file_path = filename
         self.status(self.tr("Loading %s...") % osp.basename(str(filename)))
         label_file = osp.splitext(filename)[0] + ".json"
         if self.output_dir:

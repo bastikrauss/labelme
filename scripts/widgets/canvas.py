@@ -8,7 +8,6 @@ from scripts.shape import Shape
 import labelme.utils
 from labelme.logger import logger
 
-
 # TODO(unknown):
 # - [maybe] Find optimal epsilon value.
 
@@ -38,7 +37,7 @@ class Canvas(QtWidgets.QWidget):
 
     _fill_drawing = False
 
-    logger.info("Canvas")
+    #logger.info("Canvas")
 
     def __init__(self, *args, **kwargs):
         self.epsilon = kwargs.pop("epsilon", 10.0)
@@ -196,6 +195,10 @@ class Canvas(QtWidgets.QWidget):
             if self.createMode == "brush" and not self.brushClicked:
                 if not self.current:
                     self.current = Shape(shape_type=self.createMode)
+                    #run_app()
+                    #images_dir[0] = "C:/Users/krseba/Documents/django-labeller/images"
+                    #images_dir_label.setText(images_dir[0])
+                    #tool.set_current_tool(new labelling_tool.BrushSelectEntityTool(self.root_view))
                     self.current.addPoint(pos)
                     self.prevBrush = True
                 else:
