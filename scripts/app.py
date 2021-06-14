@@ -2,6 +2,7 @@
 
 import functools
 import math
+import numpy as np
 import os
 import os.path as osp
 import re
@@ -22,15 +23,16 @@ from labelme.config import get_config
 from labelme.label_file import LabelFile
 from labelme.label_file import LabelFileError
 from labelme.logger import logger
-from shape import Shape
+from scripts.shape import Shape
 from labelme.widgets import BrightnessContrastDialog
-from widgets import Canvas
+from scripts.widgets import Canvas
 from labelme.widgets import LabelDialog
 from labelme.widgets import LabelListWidget
 from labelme.widgets import LabelListWidgetItem
 from labelme.widgets import ToolBar
 from labelme.widgets import UniqueLabelQListWidget
 from labelme.widgets import ZoomWidget
+import settings
 
 
 # FIXME
@@ -88,6 +90,9 @@ class MainWindow(QtWidgets.QMainWindow):
 
         super(MainWindow, self).__init__()
         self.setWindowTitle(__appname__)
+
+        settings.set_gobal_filepath()
+        # print(settings.filepath)
 
         # Whether we need to save or not.
         self.dirty = False
@@ -362,12 +367,12 @@ class MainWindow(QtWidgets.QMainWindow):
             self.tr("Start drawing linestrip. Ctrl+LeftClick ends creation."),
             enabled=False,
         )
-        createBrushMode = action(
-            self.tr("Create Brush"),
-            lambda: self.toggleDrawMode(False, createMode="brush"),
-            #shortcuts["create_brush"],
-            icon="brush",
-            tip=self.tr("Start marking objects."),
+        createDextrMode = action(
+            self.tr("DEXTR"),
+            lambda: self.toggleDrawMode(False, createMode="dextr"),
+            #shortcuts["dextr"],
+            icon="objects",
+            tip=self.tr("Use DEXTR for automatic segmentation"),
             enabled=False,
         )
         editMode = action(
@@ -520,6 +525,7 @@ class MainWindow(QtWidgets.QMainWindow):
                           icon='eye', tip='Changes Appearance',
                           checkable=True, enabled=True)
 
+
         # Group zoom controls into a list for easier toggling.
         zoomActions = (
             self.zoomWidget,
@@ -591,7 +597,7 @@ class MainWindow(QtWidgets.QMainWindow):
             createLineMode=createLineMode,
             createPointMode=createPointMode,
             createLineStripMode=createLineStripMode,
-            createBrushMode=createBrushMode,
+            createDextrMode=createDextrMode,
             zoom=zoom,
             zoomIn=zoomIn,
             zoomOut=zoomOut,
@@ -626,7 +632,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 createLineMode,
                 createPointMode,
                 createLineStripMode,
-                createBrushMode,
                 editMode,
                 edit,
                 copy,
@@ -644,7 +649,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 createLineMode,
                 createPointMode,
                 createLineStripMode,
-                createBrushMode,
+                createDextrMode,
                 editMode,
                 brightnessContrast,
             ),
@@ -732,7 +737,7 @@ class MainWindow(QtWidgets.QMainWindow):
             deleteFile,
             None,
             createMode,
-            createBrushMode,
+            createDextrMode,
             editMode,
             copy,
             delete,
@@ -845,7 +850,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.actions.createLineMode,
             self.actions.createPointMode,
             self.actions.createLineStripMode,
-            self.actions.createBrushMode,
+            self.actions.createDextrMode,
             self.actions.editMode,
         )
         utils.addActions(self.menus.edit, actions + self.actions.editMenu)
@@ -875,7 +880,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.actions.createLineMode.setEnabled(True)
         self.actions.createPointMode.setEnabled(True)
         self.actions.createLineStripMode.setEnabled(True)
-        self.actions.createBrushMode.setEnabled(True)
+        self.actions.createDextrMode.setEnabled(True)
         title = __appname__
         if self.filename is not None:
             title = "{} - {}".format(title, self.filename)
@@ -958,7 +963,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.actions.createLineMode.setEnabled(True)
             self.actions.createPointMode.setEnabled(True)
             self.actions.createLineStripMode.setEnabled(True)
-            self.actions.createBrushMode.setEnabled(True)
+            self.actions.createDextrMode.setEnabled(True)
         else:
             if createMode == "polygon":
                 self.actions.createMode.setEnabled(False)
@@ -967,7 +972,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.actions.createLineMode.setEnabled(True)
                 self.actions.createPointMode.setEnabled(True)
                 self.actions.createLineStripMode.setEnabled(True)
-                self.actions.createBrushMode.setEnabled(True)
+                self.actions.createDextrMode.setEnabled(True)
             elif createMode == "rectangle":
                 self.actions.createMode.setEnabled(True)
                 self.actions.createRectangleMode.setEnabled(False)
@@ -975,7 +980,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.actions.createLineMode.setEnabled(True)
                 self.actions.createPointMode.setEnabled(True)
                 self.actions.createLineStripMode.setEnabled(True)
-                self.actions.createBrushMode.setEnabled(True)
+                self.actions.createDextrMode.setEnabled(True)
             elif createMode == "line":
                 self.actions.createMode.setEnabled(True)
                 self.actions.createRectangleMode.setEnabled(True)
@@ -983,7 +988,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.actions.createLineMode.setEnabled(False)
                 self.actions.createPointMode.setEnabled(True)
                 self.actions.createLineStripMode.setEnabled(True)
-                self.actions.createBrushMode.setEnabled(True)
+                self.actions.createDextrMode.setEnabled(True)
             elif createMode == "point":
                 self.actions.createMode.setEnabled(True)
                 self.actions.createRectangleMode.setEnabled(True)
@@ -991,7 +996,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.actions.createLineMode.setEnabled(True)
                 self.actions.createPointMode.setEnabled(False)
                 self.actions.createLineStripMode.setEnabled(True)
-                self.actions.createBrushMode.setEnabled(True)
+                self.actions.createDextrMode.setEnabled(True)
             elif createMode == "circle":
                 self.actions.createMode.setEnabled(True)
                 self.actions.createRectangleMode.setEnabled(True)
@@ -999,7 +1004,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.actions.createLineMode.setEnabled(True)
                 self.actions.createPointMode.setEnabled(True)
                 self.actions.createLineStripMode.setEnabled(True)
-                self.actions.createBrushMode.setEnabled(True)
+                self.actions.createDextrMode.setEnabled(True)
             elif createMode == "linestrip":
                 self.actions.createMode.setEnabled(True)
                 self.actions.createRectangleMode.setEnabled(True)
@@ -1007,16 +1012,15 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.actions.createLineMode.setEnabled(True)
                 self.actions.createPointMode.setEnabled(True)
                 self.actions.createLineStripMode.setEnabled(False)
-                self.actions.createBrushMode.setEnabled(True)
-            elif createMode == "brush":
-                logger.info("Brush Mode activated")
+                self.actions.createDextrMode.setEnabled(True)
+            elif createMode == "dextr":
                 self.actions.createMode.setEnabled(True)
                 self.actions.createRectangleMode.setEnabled(True)
                 self.actions.createCircleMode.setEnabled(True)
                 self.actions.createLineMode.setEnabled(True)
                 self.actions.createPointMode.setEnabled(True)
                 self.actions.createLineStripMode.setEnabled(True)
-                self.actions.createBrushMode.setEnabled(False)
+                self.actions.createDextrMode.setEnabled(False)
             else:
                 raise ValueError("Unsupported createMode: %s" % createMode)
         self.actions.editMode.setEnabled(not edit)
@@ -1453,7 +1457,7 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             self.darkFlag = False
             self.setStyleSheet("background-color: white; color: black")
-    
+
     def togglePolygons(self, value):
         for item in self.labelList:
             item.setCheckState(Qt.Checked if value else Qt.Unchecked)
@@ -1465,6 +1469,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.fileListWidget.currentRow() != self.imageList.index(filename)
         ):
             self.fileListWidget.setCurrentRow(self.imageList.index(filename))
+            settings.filepath = filename
             self.fileListWidget.repaint()
             return
 
@@ -1738,6 +1743,8 @@ class MainWindow(QtWidgets.QMainWindow):
         if QT5:
             filename, _ = filename
         filename = str(filename)
+        settings.filepath = filename
+        print(filename)
         if filename:
             self.loadFile(filename)
 

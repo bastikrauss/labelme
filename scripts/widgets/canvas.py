@@ -1,12 +1,18 @@
-import sys
+from scripts.dextrs.predict import DextrModel
+from PyQt5.QtCore import QPointF
 from qtpy import QtCore
 from qtpy import QtGui
 from qtpy import QtWidgets
 
 from labelme import QT5
 from scripts.shape import Shape
-import labelme.utils
-from labelme.logger import logger
+import scripts.utils
+
+from PIL import Image
+import numpy as np
+from matplotlib import pyplot as plt
+from dextrs.predict import DextrModel
+import settings
 
 
 # TODO(unknown):
@@ -18,7 +24,6 @@ CURSOR_POINT = QtCore.Qt.PointingHandCursor
 CURSOR_DRAW = QtCore.Qt.CrossCursor
 CURSOR_MOVE = QtCore.Qt.ClosedHandCursor
 CURSOR_GRAB = QtCore.Qt.OpenHandCursor
-
 
 class Canvas(QtWidgets.QWidget):
 
@@ -38,7 +43,7 @@ class Canvas(QtWidgets.QWidget):
 
     _fill_drawing = False
 
-    logger.info("Canvas")
+    # print("Canvas")
 
     def __init__(self, *args, **kwargs):
         self.epsilon = kwargs.pop("epsilon", 10.0)
@@ -78,8 +83,6 @@ class Canvas(QtWidgets.QWidget):
         self.hEdge = None
         self.prevhEdge = None
         self.movingShape = False
-        self.brushClicked = False
-        self.prevBrush = False
         self._painter = QtGui.QPainter()
         self._cursor = CURSOR_DEFAULT
         # Menus:
@@ -89,6 +92,8 @@ class Canvas(QtWidgets.QWidget):
         # Set widget options.
         self.setMouseTracking(True)
         self.setFocusPolicy(QtCore.Qt.WheelFocus)
+
+        self.dextrmodel = None
 
     def fillDrawing(self):
         return self._fill_drawing
@@ -109,7 +114,7 @@ class Canvas(QtWidgets.QWidget):
             "line",
             "point",
             "linestrip",
-            "brush"
+            "dextr"
         ]:
             raise ValueError("Unsupported createMode: %s" % value)
         self._createMode = value
@@ -193,30 +198,7 @@ class Canvas(QtWidgets.QWidget):
         if self.drawing():
             self.line.shape_type = self.createMode
 
-            if self.createMode == "brush" and not self.brushClicked:
-                if not self.current:
-                    self.current = Shape(shape_type=self.createMode)
-                    self.current.addPoint(pos)
-                    self.prevBrush = True
-                else:
-                    self.current[0] = pos
-            if not self.createMode == "brush" and self.prevBrush:
-                self.undoLastPoint()
-                self.prevBrush = False
-
-                # self.overrideCursor(CURSOR_DRAW)
-                # color = QtGui.QColor(0, 255, 0, 128)
-                # pen = QtGui.QPen(color)
-                # # Try using integer sizes for smoother drawing(?)
-                # pen.setWidth(max(1, int(round(2.0 / self.scale))))
-                # q = self._painter
-                # q.begin(self)
-                # q.setPen(pen)
-                # q.drawEllipse(pos, 20, 20)
-                # #self.current.highlightVertex(0, Shape.NEAR_VERTEX)
-            
             self.overrideCursor(CURSOR_DRAW)
-
             if not self.current:
                 return
 
@@ -227,7 +209,7 @@ class Canvas(QtWidgets.QWidget):
             elif (
                 len(self.current) > 1
                 and self.createMode == "polygon"
-                and self.closeEnough(pos, self.current[0]) #kurz bevor das Polygon geschlossen wird
+                and self.closeEnough(pos, self.current[0])
             ):
                 # Attract line to starting point and
                 # colorise to alert the user.
@@ -246,10 +228,10 @@ class Canvas(QtWidgets.QWidget):
             elif self.createMode == "line":
                 self.line.points = [self.current[0], pos]
                 self.line.close()
-            elif self.createMode == "brush":
-                self.line.points = [self.current[0], pos]
-                self.line.close()
             elif self.createMode == "point":
+                self.line.points = [self.current[0]]
+                self.line.close()
+            elif self.createMode == "dextr":
                 self.line.points = [self.current[0]]
                 self.line.close()
             self.repaint()
@@ -363,16 +345,31 @@ class Canvas(QtWidgets.QWidget):
                         self.line[0] = self.current[-1]
                         if self.current.isClosed():
                             self.finalise()
-                    elif self.createMode == "brush":
-                        if not self.brushClicked:
-                            self.brushClicked = True
-                            return
-                        # else:
-                        #     self.brushClicked = False
-                    if self.createMode in ["rectangle", "circle", "line", "brush"]:
-                        assert len(self.current.points) == 1 #must be true to continue
+                    elif self.createMode in ["rectangle", "circle", "line"]:
+                        assert len(self.current.points) == 1
                         self.current.points = self.line.points
                         self.finalise()
+                    elif self.createMode == "dextr":
+                        self.current.addPoint(pos)
+                        if len(self.current.points) == 4:
+                            if self.dextrmodel is None:
+                                self.dextrmodel = DextrModel()
+                            extreme_points_ori = np.array([[int(self.current.points[0].x()),int(self.current.points[0].y())],
+                            [int(self.current.points[1].x()),int(self.current.points[1].y())],[int(self.current.points[2].x()),int(self.current.points[2].y())],
+                            [int(self.current.points[3].x()),int(self.current.points[3].y())]])
+                            # print(extreme_points_ori)
+                            # print(settings.filepath)
+                            contour = self.dextrmodel.dextrPrediction(settings.filepath, extreme_points_ori)
+                            # print("contour approximated")
+                            self.current.removePoint(1)
+                            self.current.removePoint(1)
+                            self.current.removePoint(1)
+                            for i in contour:
+                                p = QPointF(i[0][0],i[0][1])
+                                self.current.addPoint(p)
+                            self.current.removePoint(0)
+                            self.repaint()
+                            self.finalise()
                     elif self.createMode == "linestrip":
                         self.current.addPoint(self.line[1])
                         self.line[0] = self.current[-1]
@@ -403,16 +400,6 @@ class Canvas(QtWidgets.QWidget):
             self.repaint()
 
     def mouseReleaseEvent(self, ev):
-        if ev.button() == QtCore.Qt.LeftButton:
-            if self.drawing():
-                if self.current:
-                    # Add point to existing shape
-                    if self.createMode == "brush":
-                        assert len(self.current.points) == 1 #must be true to continue
-                        self.brushClicked = False
-                        #self.line.points =  self.current.getBrushRectFromLine(self.line.points)
-                        self.current.points = self.line.points
-                        self.finalise()
         if ev.button() == QtCore.Qt.RightButton:
             menu = self.menus[len(self.selectedShapesCopy) > 0]
             self.restoreCursor()
@@ -671,7 +658,7 @@ class Canvas(QtWidgets.QWidget):
         # m = (p1-p2).manhattanLength()
         # print "d %.2f, m %d, %.2f" % (d, m, d - m)
         # divide by scale to allow more precision when zoomed in
-        return labelme.utils.distance(p1 - p2) < (self.epsilon / self.scale)
+        return scripts.utils.distance(p1 - p2) < (self.epsilon / self.scale)
 
     def intersectionPoint(self, p1, p2):
         # Cycle through each image edge in clockwise fashion,
@@ -725,7 +712,7 @@ class Canvas(QtWidgets.QWidget):
                 x = x1 + ua * (x2 - x1)
                 y = y1 + ua * (y2 - y1)
                 m = QtCore.QPoint((x3 + x4) / 2, (y3 + y4) / 2)
-                d = labelme.utils.distance(m - QtCore.QPoint(x2, y2))
+                d = scripts.utils.distance(m - QtCore.QPoint(x2, y2))
                 yield d, i, (x, y)
 
     # These two, along with a call to adjustSize are required for the
@@ -790,7 +777,7 @@ class Canvas(QtWidgets.QWidget):
         self.current.setOpen()
         if self.createMode in ["polygon", "linestrip"]:
             self.line.points = [self.current[-1], self.current[0]]
-        elif self.createMode in ["rectangle", "line", "circle", "brush"]:
+        elif self.createMode in ["rectangle", "line", "circle"]:
             self.current.points = self.current.points[0:1]
         elif self.createMode == "point":
             self.current = None

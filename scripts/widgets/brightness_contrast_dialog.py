@@ -4,7 +4,7 @@ from qtpy.QtCore import Qt
 from qtpy import QtGui
 from qtpy import QtWidgets
 
-import utils
+from .. import utils
 
 
 class BrightnessContrastDialog(QtWidgets.QDialog):

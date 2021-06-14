@@ -4,8 +4,7 @@ import math
 from qtpy import QtCore
 from qtpy import QtGui
 
-import labelme.utils
-from logger import logger
+import scripts.utils
 
 
 # TODO(unknown):
@@ -22,6 +21,7 @@ DEFAULT_HVERTEX_FILL_COLOR = QtGui.QColor(255, 255, 255, 255)  # hovering
 
 class Shape(object):
 
+    # print("Shape")
     P_SQUARE, P_ROUND = 0, 1
 
     MOVE_VERTEX, NEAR_VERTEX = 0, 1
@@ -35,10 +35,7 @@ class Shape(object):
     hvertex_fill_color = DEFAULT_HVERTEX_FILL_COLOR
     point_type = P_ROUND
     point_size = 8
-    brush_size = 30
     scale = 1.0
-
-    logger.info("Shape")
 
     def __init__(
         self,
@@ -89,7 +86,7 @@ class Shape(object):
             "line",
             "circle",
             "linestrip",
-            "brush"
+            "dextr"
         ]:
             raise ValueError("Unexpected shape_type: {}".format(value))
         self._shape_type = value
@@ -155,11 +152,6 @@ class Shape(object):
                     line_path.addEllipse(rectangle)
                 for i in range(len(self.points)):
                     self.drawVertex(vrtx_path, i)
-            # elif self.shape_type == "brush":
-            #     assert len(self.points) in [1, 2]
-            #     if len(self.points) == 2:
-            #         rectangle = self.getBrushRectFromLine(self.points)
-            #         line_path.addEllipse(rectangle)
             elif self.shape_type == "linestrip":
                 line_path.moveTo(self.points[0])
                 for i, p in enumerate(self.points):
@@ -177,13 +169,6 @@ class Shape(object):
                     self.drawVertex(vrtx_path, i)
                 if self.isClosed():
                     line_path.lineTo(self.points[0])
-            if self.shape_type == "brush":
-                #painter.translate(self.points[0])
-                #painter.rotate(45)
-                painter.drawEllipse(self.points[0], self.brush_size, self.brush_size)
-                #painter.drawEllipse(0, 0, self.brush_size, self.brush_size)
-                #painter.rotate(-45)
-                #painter.translate(0,0)
 
             painter.drawPath(line_path)
             painter.drawPath(vrtx_path)
@@ -207,11 +192,6 @@ class Shape(object):
             self._vertex_fill_color = self.hvertex_fill_color
         else:
             self._vertex_fill_color = self.vertex_fill_color
-        if self.shape_type == "brush" and len(self.points) > 1:
-            
-            path.addEllipse(self.points[i], self.brush_size, self.brush_size)
-
-            return    
         if shape == self.P_SQUARE:
             path.addRect(point.x() - d / 2, point.y() - d / 2, d, d)
         elif shape == self.P_ROUND:
@@ -223,7 +203,7 @@ class Shape(object):
         min_distance = float("inf")
         min_i = None
         for i, p in enumerate(self.points):
-            dist = labelme.utils.distance(p - point)
+            dist = scripts.utils.distance(p - point)
             if dist <= epsilon and dist < min_distance:
                 min_distance = dist
                 min_i = i
@@ -234,7 +214,7 @@ class Shape(object):
         post_i = None
         for i in range(len(self.points)):
             line = [self.points[i - 1], self.points[i]]
-            dist = labelme.utils.distancetoline(point, line)
+            dist = scripts.utils.distancetoline(point, line)
             if dist <= epsilon and dist < min_distance:
                 min_distance = dist
                 post_i = i
@@ -253,16 +233,6 @@ class Shape(object):
         rectangle = QtCore.QRectF(c.x() - d, c.y() - d, 2 * d, 2 * d)
         return rectangle
 
-    def getBrushRectFromLine(self, line):
-        """Computes parameters to draw with `QPainterPath::addEllipse`"""
-        if len(line) != 2:
-            return line
-        (p1, p2) = line
-        r = line[0] - line[1]
-        d = math.sqrt(math.pow(r.x(), 2) + math.pow(r.y(), 2))
-        rectangle = QtCore.QRectF(c.x() - d, c.y() - d, d + 2*self.brush_size, self.brush_size)
-        return rectangle
-
     def makePath(self):
         if self.shape_type == "rectangle":
             path = QtGui.QPainterPath()
@@ -274,11 +244,6 @@ class Shape(object):
             if len(self.points) == 2:
                 rectangle = self.getCircleRectFromLine(self.points)
                 path.addEllipse(rectangle)
-        # elif self.shape_type == "brush":
-        #     path = QtGui.QPainterPath()
-        #     if len(self.points) == 2:
-        #         rectangle = self.getBrushRectFromLine(self.points)
-        #         path.addEllipse(rectangle)
         else:
             path = QtGui.QPainterPath(self.points[0])
             for p in self.points[1:]:
